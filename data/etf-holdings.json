@@ -1,0 +1,198 @@
+{
+  "SPY": {
+    "name": "State Street SPDR S&P 500 ETF Trust",
+    "asOf": "2026-10-08",
+    "source": "State Street Global Advisors",
+    "sourceUrl": "https://www.ssga.com/us/en/intermediary/library-content/products/fund-data/etfs/us/holdings-daily-us-en-spy.xlsx",
+    "holdings": [
+      {
+        "symbol": "NVDA",
+        "company": "NVIDIA",
+        "name": "NVIDIA Corporation",
+        "weight": 0.08336249
+      },
+      {
+        "symbol": "AAPL",
+        "company": "Apple",
+        "name": "Apple Inc.",
+        "weight": 0.07425376
+      },
+      {
+        "symbol": "MSFT",
+        "company": "Microsoft",
+        "name": "Microsoft Corporation",
+        "weight": 0.05800066
+      },
+      {
+        "symbol": "AMZN",
+        "company": "Amazon",
+        "name": "Amazon.com, Inc.",
+        "weight": 0.03727229
+      },
+      {
+        "symbol": "GOOGL",
+        "company": "Alphabet",
+        "name": "Alphabet Inc. Class A",
+        "weight": 0.03054719
+      },
+      {
+        "symbol": "AVGO",
+        "company": "Broadcom",
+        "name": "Broadcom Inc.",
+        "weight": 0.02560963
+      },
+      {
+        "symbol": "GOOG",
+        "company": "Alphabet",
+        "name": "Alphabet Inc. Class C",
+        "weight": 0.02450071
+      },
+      {
+        "symbol": "META",
+        "company": "Meta Platforms",
+        "name": "Meta Platforms, Inc. Class A",
+        "weight": 0.02376019
+      },
+      {
+        "symbol": "MU",
+        "company": "Micron",
+        "name": "Micron Technology, Inc.",
+        "weight": 0.01748625
+      },
+      {
+        "symbol": "TSLA",
+        "company": "Tesla",
+        "name": "Tesla, Inc.",
+        "weight": 0.01579717
+      },
+      {
+        "symbol": "AMD",
+        "company": "AMD",
+        "name": "Advanced Micro Devices, Inc.",
+        "weight": 0.01514538
+      },
+      {
+        "symbol": "BRK.B",
+        "company": "Berkshire Hathaway",
+        "name": "Berkshire Hathaway Inc. Class B",
+        "weight": 0.01422707
+      },
+      {
+        "symbol": "LLY",
+        "company": "Eli Lilly",
+        "name": "Eli Lilly and Company",
+        "weight": 0.0139891
+      },
+      {
+        "symbol": "JPM",
+        "company": "JPMorgan Chase",
+        "name": "JPMorgan Chase & Co.",
+        "weight": 0.01316867
+      },
+      {
+        "symbol": "XOM",
+        "company": "ExxonMobil",
+        "name": "Exxon Mobil Corporation",
+        "weight": 0.01035717
+      }
+    ]
+  },
+  "FXAIX": {
+    "name": "Fidelity 500 Index Fund",
+    "asOf": "2026-05-31",
+    "source": "Fidelity Concord Street Trust, Form N-PORT-P filed with the SEC (EDGAR)",
+    "sourceUrl": "https://www.sec.gov/Archives/edgar/data/819118/000003540226004626/primary_doc.xml",
+    "holdings": [
+      {
+        "symbol": "NVDA",
+        "company": "NVIDIA",
+        "name": "NVIDIA Corporation",
+        "weight": 0.07890099
+      },
+      {
+        "symbol": "AAPL",
+        "company": "Apple",
+        "name": "Apple Inc.",
+        "weight": 0.07045365
+      },
+      {
+        "symbol": "MSFT",
+        "company": "Microsoft",
+        "name": "Microsoft Corporation",
+        "weight": 0.05141419
+      },
+      {
+        "symbol": "AMZN",
+        "company": "Amazon",
+        "name": "Amazon.com, Inc.",
+        "weight": 0.04065724
+      },
+      {
+        "symbol": "GOOGL",
+        "company": "Alphabet",
+        "name": "Alphabet Inc. Class A",
+        "weight": 0.03405259
+      },
+      {
+        "symbol": "AVGO",
+        "company": "Broadcom",
+        "name": "Broadcom Inc.",
+        "weight": 0.03257502
+      },
+      {
+        "symbol": "GOOG",
+        "company": "Alphabet",
+        "name": "Alphabet Inc. Class C",
+        "weight": 0.02707242
+      },
+      {
+        "symbol": "META",
+        "company": "Meta Platforms",
+        "name": "Meta Platforms, Inc. Class A",
+        "weight": 0.02127439
+      },
+      {
+        "symbol": "TSLA",
+        "company": "Tesla",
+        "name": "Tesla, Inc.",
+        "weight": 0.01884803
+      },
+      {
+        "symbol": "MU",
+        "company": "Micron",
+        "name": "Micron Technology, Inc.",
+        "weight": 0.01680637
+      },
+      {
+        "symbol": "LLY",
+        "company": "Eli Lilly",
+        "name": "Eli Lilly and Company",
+        "weight": 0.01346553
+      },
+      {
+        "symbol": "BRK.B",
+        "company": "Berkshire Hathaway",
+        "name": "Berkshire Hathaway Inc. Class B",
+        "weight": 0.01338012
+      },
+      {
+        "symbol": "AMD",
+        "company": "AMD",
+        "name": "Advanced Micro Devices, Inc.",
+        "weight": 0.01294007
+      },
+      {
+        "symbol": "JPM",
+        "company": "JPMorgan Chase",
+        "name": "JPMorgan Chase & Co.",
+        "weight": 0.0124102
+      },
+      {
+        "symbol": "XOM",
+        "company": "ExxonMobil",
+        "name": "Exxon Mobil Corporation",
+        "weight": 0.00933521
+      }
+    ]
+  }
+}
