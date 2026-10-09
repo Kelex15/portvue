@@ -1,103 +1,153 @@
-import Image from "next/image";
+import { getPortfolio, type Portfolio } from "@/lib/portfolio";
+import { lookThrough, type FundData } from "@/lib/xray";
+import etfHoldings from "@/data/etf-holdings.json";
+import { XRayPanel } from "@/components/xray-panel";
+import { MovesPanel } from "@/components/moves-panel";
+import { fmtPct, fmtUnits, fmtUsd, fmtUsd0 } from "@/lib/format";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  let portfolio: Portfolio | null = null;
+  let loadError: string | null = null;
+  try {
+    portfolio = await getPortfolio();
+  } catch (e) {
+    const err = e as { message?: string; responseBody?: unknown };
+    loadError = `${err.message ?? String(e)}${err.responseBody ? ` ${JSON.stringify(err.responseBody)}` : ""}`;
+  }
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">Portvue</h1>
+          <p className="text-muted-foreground">Portfolio X-Ray: what you really own, across every account.</p>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+        <Button render={<a href="/api/connect" />} variant="outline">
+          Connect a brokerage
+        </Button>
+      </header>
+
+      {loadError && (
+        <Card className="border-destructive">
+          <CardHeader>
+            <CardTitle className="text-destructive">Couldn&apos;t load accounts from SnapTrade</CardTitle>
+            <CardDescription className="font-mono text-xs break-all">{loadError}</CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+
+      {portfolio && portfolio.accounts.length === 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>No accounts connected yet</CardTitle>
+            <CardDescription>Connect the SnapTrade Sandbox to see your holdings.</CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+
+      {portfolio && portfolio.accounts.length > 0 && <PortfolioView p={portfolio} />}
+    </main>
+  );
+}
+
+function PortfolioView({ p }: { p: Portfolio }) {
+  const investable = p.holdings.filter((h) => !h.cashEquivalent);
+  const totalsDiffer = Math.abs(p.totalValue - p.reportedTotal) > 0.01;
+
+  return (
+    <>
+      {p.warnings.length > 0 && (
+        <Card className="border-destructive">
+          <CardHeader>
+            <CardTitle className="text-destructive">Some positions were left out</CardTitle>
+            <ul className="list-disc pl-5 text-sm text-muted-foreground">
+              {p.warnings.map((e) => (
+                <li key={e}>{e}</li>
+              ))}
+            </ul>
+          </CardHeader>
+        </Card>
+      )}
+
+      <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <Tile label="Total value" value={fmtUsd0(p.totalValue)} hint={totalsDiffer ? `SnapTrade reports ${fmtUsd0(p.reportedTotal)}` : undefined} />
+        <Tile label="Cash" value={fmtUsd0(p.cash)} hint={`${fmtPct(p.cash / p.totalValue)} of portfolio`} />
+        <Tile label="Holdings" value={String(investable.length)} hint="unique symbols" />
+        <Tile label="Accounts" value={String(p.accounts.length)} hint={p.accounts.map((a) => a.name).join(" · ")} />
+      </section>
+
+      <XRayPanel xray={lookThrough(p, etfHoldings as FundData)} />
+
+      <MovesPanel />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Holdings across accounts</CardTitle>
+          <CardDescription>
+            Combined by symbol. Market value = units × price. Source: SnapTrade
+            {p.asOf ? `, as of ${new Date(p.asOf).toLocaleString("en-US")}` : ""} (fetched{" "}
+            {new Date(p.fetchedAt).toLocaleTimeString("en-US")}).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Symbol</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Accounts</TableHead>
+                <TableHead className="text-right">Units</TableHead>
+                <TableHead className="text-right">Price</TableHead>
+                <TableHead className="text-right">Value</TableHead>
+                <TableHead className="text-right">% of portfolio</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {p.holdings.map((h) => (
+                <TableRow key={h.symbol} className={h.cashEquivalent ? "text-muted-foreground" : undefined}>
+                  <TableCell>
+                    <div className="font-medium">{h.symbol}</div>
+                    <div className="max-w-56 truncate text-xs text-muted-foreground">{h.name}</div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">{h.kind}</Badge>
+                    {h.cashEquivalent && (
+                      <Badge variant="outline" className="ml-1">
+                        counted in cash
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-sm">{h.accounts.map((a) => a.accountName).join(", ")}</TableCell>
+                  <TableCell className="text-right tabular-nums">{fmtUnits(h.units)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{fmtUsd(h.price)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{fmtUsd(h.value)}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {h.cashEquivalent ? "—" : fmtPct(h.value / p.totalValue)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
+function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardDescription>{label}</CardDescription>
+        <CardTitle className="text-2xl tabular-nums">{value}</CardTitle>
+        {hint && <p className="truncate text-xs text-muted-foreground">{hint}</p>}
+      </CardHeader>
+    </Card>
   );
 }
