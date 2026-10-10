@@ -36,6 +36,12 @@ function db(): DatabaseSync {
       fetched_at  TEXT NOT NULL,
       PRIMARY KEY (period, market_date, driver_set)
     );
+    CREATE TABLE IF NOT EXISTS ai_calls (
+      bucket  TEXT NOT NULL,
+      client  TEXT NOT NULL,
+      at      INTEGER NOT NULL      -- epoch ms
+    );
+    CREATE INDEX IF NOT EXISTS ai_calls_lookup ON ai_calls (bucket, client, at);
   `);
   holder.__portvueDb = conn;
   return conn;
@@ -100,4 +106,38 @@ export function writeDrivers(period: string, driverSet: string, payload: unknown
        ON CONFLICT DO UPDATE SET payload = excluded.payload, fetched_at = excluded.fetched_at`,
     )
     .run(period, date, driverSet, JSON.stringify(payload), new Date().toISOString());
+}
+
+const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
+
+// Sliding-window limit on paid AI calls. Records the call only when it is allowed.
+export function takeAiCall(
+  bucket: string,
+  client: string,
+  limits: { perHour: number; perDay: number; globalPerDay: number },
+): { ok: true } | { ok: false; scope: "global" | "client"; retryAfterSec: number } {
+  const conn = db();
+  const now = Date.now();
+  conn.prepare("DELETE FROM ai_calls WHERE at < ?").run(now - DAY);
+
+  // Safety net across all visitors, so many IPs together can't run up the bill.
+  const global = conn.prepare("SELECT COUNT(*) AS n, MIN(at) AS first FROM ai_calls WHERE bucket = ?").get(bucket) as {
+    n: number;
+    first: number | null;
+  };
+  if (global.n >= limits.globalPerDay)
+    return { ok: false, scope: "global", retryAfterSec: Math.ceil((global.first! + DAY - now) / 1000) };
+  const times = (
+    conn.prepare("SELECT at FROM ai_calls WHERE bucket = ? AND client = ? ORDER BY at").all(bucket, client) as { at: number }[]
+  ).map((r) => r.at);
+
+  const lastHour = times.filter((t) => t > now - HOUR);
+  if (lastHour.length >= limits.perHour)
+    return { ok: false, scope: "client", retryAfterSec: Math.ceil((lastHour[0] + HOUR - now) / 1000) };
+  if (times.length >= limits.perDay)
+    return { ok: false, scope: "client", retryAfterSec: Math.ceil((times[0] + DAY - now) / 1000) };
+
+  conn.prepare("INSERT INTO ai_calls (bucket, client, at) VALUES (?, ?, ?)").run(bucket, client, now);
+  return { ok: true };
 }

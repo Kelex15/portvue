@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { z } from "zod/v4";
@@ -6,6 +6,7 @@ import { errMessage, getPortfolio } from "@/lib/portfolio";
 import { lookThrough, type FundData } from "@/lib/xray";
 import { toInsights } from "@/lib/insights";
 import etfHoldings from "@/data/etf-holdings.json";
+import { limitAiCall } from "@/lib/rate-limit";
 
 const Explanation = z.object({
   paragraphs: z.array(
@@ -31,7 +32,9 @@ Do not suggest buying, selling, or rebalancing anything, and do not give financi
 
 const client = new Anthropic();
 
-export async function POST() {
+export async function POST(req: NextRequest) {
+  const limited = limitAiCall(req, "explain");
+  if (limited) return limited;
   try {
     const portfolio = await getPortfolio();
     const xray = lookThrough(portfolio, etfHoldings as FundData);

@@ -5,6 +5,7 @@ import { lookThrough, type FundData } from "@/lib/xray";
 import { computeMoves } from "@/lib/moves";
 import { marketDate, readDrivers, writeDrivers } from "@/lib/store";
 import etfHoldings from "@/data/etf-holdings.json";
+import { limitAiCall } from "@/lib/rate-limit";
 
 export type DriverBlock = { text: string; citations: { url: string; title: string | null }[] };
 type DriversResult = { blocks: DriverBlock[]; drivers: string[]; model?: string };
@@ -31,6 +32,9 @@ export async function POST(req: NextRequest) {
     const driverSet = report.topDrivers.join(",");
     const stored = readDrivers<DriversResult>(period, driverSet);
     if (stored) return NextResponse.json(stored);
+
+    const limited = limitAiCall(req, "drivers");
+    if (limited) return limited;
 
     const periodText =
       period === "day" ? `today (${marketDate()})` : `the past week (since ${drivers[0].since ?? "5 trading days ago"})`;
