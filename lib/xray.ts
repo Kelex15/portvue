@@ -187,7 +187,8 @@ function computeFindings(
         pctOfPortfolio: pct1(e.pct),
         directUsd: round(direct),
         viaFundsUsd: round(indirect),
-        viaFundsShareOfExposure: pct1(indirect / e.value),
+        directSharePctOfThisExposure: pct1(direct / e.value),
+        viaFundsSharePctOfThisExposure: pct1(indirect / e.value),
         paths: paths(e),
         routes: [...new Set(e.contributions.map((c) => (c.via === "direct" ? `direct ${c.heldSymbol}` : `via ${c.via}`) + ` in ${c.accountName}`))],
       },
@@ -249,7 +250,7 @@ function computeFindings(
 
   findings.push({
     id: "unknown-remainder",
-    title: "Fund holdings not covered by the snapshot",
+    title: "Share of the whole portfolio held in fund holdings outside the snapshot",
     summary: `${pct1(unknownValue / totalValue)}% of the portfolio sits in fund holdings outside the top-holdings snapshot, so look-through figures are lower bounds.`,
     exposureKeys: [],
     numbers: { unknownUsd: round(unknownValue), pctOfPortfolio: pct1(unknownValue / totalValue) },
