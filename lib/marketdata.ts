@@ -52,10 +52,11 @@ export class AlphaVantageProvider implements MarketDataProvider<WeeklyMove> {
   readonly id = "alphavantage";
   readonly envVar = "ALPHAVANTAGE_API_KEY";
   readonly minIntervalMs = 12500; // free: 25 calls/day, and bursts get throttled
-  private exhausted = false;
+  // Market date on which Alpha Vantage refused calls; cleared when the date rolls over.
+  private exhaustedOn: string | null = null;
 
   async fetchMove(symbol: string, apiKey: string): Promise<WeeklyMove | null> {
-    if (this.exhausted) throw new Error("rate limited earlier in this process");
+    if (this.exhaustedOn === marketDate()) throw new Error("rate limited earlier today");
     // "CRYPTO:BTC" selects the digital-currency series; crypto trades daily, so a week is 7 rows rather than 5.
     const crypto = symbol.startsWith("CRYPTO:");
     const url = crypto
@@ -66,7 +67,7 @@ export class AlphaVantageProvider implements MarketDataProvider<WeeklyMove> {
     const body = await res.json();
     // Rate-limit and plan messages arrive as HTTP 200 with "Information" or "Note".
     if (body.Information || body.Note) {
-      this.exhausted = true;
+      this.exhaustedOn = marketDate();
       throw new Error(body.Information ?? body.Note);
     }
     if (body["Error Message"]) return null;
@@ -106,7 +107,34 @@ const alphaVantage = new AlphaVantageProvider();
 
 const warnedMissingKey = new Set<string>();
 
+// One queue per provider for the whole server process, so concurrent requests (e.g. history and weekly
+// moves on the same page load) can't burst past the provider's rate limit or fetch the same symbol twice.
+type Gate = { chain: Promise<unknown>; last: number };
+const gates = ((globalThis as unknown as { __marketGates?: Record<string, Gate> }).__marketGates ??= {});
+
+function throttled<R>(provider: MarketDataProvider<unknown>, fn: () => Promise<R>): Promise<R> {
+  const gate = (gates[provider.id] ??= { chain: Promise.resolve(), last: 0 });
+  const run = gate.chain.then(async () => {
+    const wait = gate.last + provider.minIntervalMs - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    try {
+      return await fn();
+    } finally {
+      gate.last = Date.now();
+    }
+  });
+  gate.chain = run.catch(() => undefined);
+  return run;
+}
+
 async function getMove<T>(provider: MarketDataProvider<T>, symbol: string): Promise<T | null> {
+  const stored = readMove<T>(provider.id, symbol);
+  if (stored !== undefined) return stored;
+  return throttled(provider, () => fetchAndStore(provider, symbol));
+}
+
+async function fetchAndStore<T>(provider: MarketDataProvider<T>, symbol: string): Promise<T | null> {
+  // Another request may have fetched this symbol while we waited in the queue.
   const stored = readMove<T>(provider.id, symbol);
   if (stored !== undefined) return stored;
 
@@ -147,15 +175,6 @@ export async function getMoves(
 ): Promise<Record<string, DailyMove | WeeklyMove | null>> {
   const provider: MarketDataProvider<DailyMove | WeeklyMove> = period === "day" ? finnhub : alphaVantage;
   const out: Record<string, DailyMove | WeeklyMove | null> = {};
-  let lastNetworkCall = 0;
-
-  for (const symbol of new Set(symbols)) {
-    if (readMove(provider.id, symbol) === undefined) {
-      const wait = lastNetworkCall + provider.minIntervalMs - Date.now();
-      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-      lastNetworkCall = Date.now();
-    }
-    out[symbol] = await getMove(provider, symbol);
-  }
+  for (const symbol of new Set(symbols)) out[symbol] = await getMove(provider, symbol);
   return out;
 }
