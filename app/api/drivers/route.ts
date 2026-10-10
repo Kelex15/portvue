@@ -7,6 +7,9 @@ import { marketDate, readDrivers, writeDrivers } from "@/lib/store";
 import etfHoldings from "@/data/etf-holdings.json";
 import { limitAiCall } from "@/lib/rate-limit";
 
+// First fetch of the day spaces Alpha Vantage calls 12.5s apart (free-tier limit).
+export const maxDuration = 300;
+
 export type DriverBlock = { text: string; citations: { url: string; title: string | null }[] };
 type DriversResult = { blocks: DriverBlock[]; drivers: string[]; model?: string };
 

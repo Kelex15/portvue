@@ -4,6 +4,9 @@ import { lookThrough, type FundData } from "@/lib/xray";
 import { computeMoves } from "@/lib/moves";
 import etfHoldings from "@/data/etf-holdings.json";
 
+// First fetch of the day spaces Alpha Vantage calls 12.5s apart (free-tier limit).
+export const maxDuration = 300;
+
 export async function GET(req: NextRequest) {
   const period = req.nextUrl.searchParams.get("period") === "week" ? "week" : "day";
   try {

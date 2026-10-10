@@ -3,7 +3,10 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
-const DB_PATH = path.join(process.cwd(), "data", "portvue.db");
+// Vercel's deployment directory is read-only; /tmp is the only writable path there (and is wiped on cold starts).
+const DB_PATH =
+  process.env.PORTVUE_DB_PATH ??
+  (process.env.VERCEL ? "/tmp/portvue.db" : path.join(process.cwd(), "data", "portvue.db"));
 
 // One connection per server process; dev hot reloads re-evaluate modules, so keep it on globalThis.
 const holder = globalThis as unknown as { __portvueDb?: DatabaseSync };
