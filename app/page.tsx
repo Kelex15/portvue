@@ -1,153 +1,184 @@
-import { getPortfolio, type Portfolio } from "@/lib/portfolio";
-import { lookThrough, type FundData } from "@/lib/xray";
+import { Suspense } from "react";
+import { Lightbulb } from "lucide-react";
+import type { Portfolio } from "@/lib/portfolio";
+import { lookThrough, type FundData, type XRay } from "@/lib/xray";
+import { computeMoves } from "@/lib/moves";
+import { allocation } from "@/lib/allocation";
+import { toInsights } from "@/lib/insights";
 import etfHoldings from "@/data/etf-holdings.json";
-import { XRayPanel } from "@/components/xray-panel";
-import { MovesPanel } from "@/components/moves-panel";
-import { fmtPct, fmtUnits, fmtUsd, fmtUsd0 } from "@/lib/format";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { fmtPct, fmtUsd0 } from "@/lib/format";
+import { PortfolioGate } from "@/components/portfolio-gate";
+import { Kpi, PageHeader, Panel, PanelLink, Skeleton, SourceNote, signedPct, signedUsd, toneOf } from "@/components/portvue/kit";
+import { Donut } from "@/components/portvue/donut";
+import { InsightRow } from "@/components/portvue/insight-card";
+import { HistoryPanel } from "@/components/portvue/history-panel";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
-  let portfolio: Portfolio | null = null;
-  let loadError: string | null = null;
-  try {
-    portfolio = await getPortfolio();
-  } catch (e) {
-    const err = e as { message?: string; responseBody?: unknown };
-    loadError = `${err.message ?? String(e)}${err.responseBody ? ` ${JSON.stringify(err.responseBody)}` : ""}`;
-  }
+const SLICE_COLORS = ["var(--series-1)", "var(--series-2)", "var(--series-3)", "var(--series-4)"];
 
-  return (
-    <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Portvue</h1>
-          <p className="text-muted-foreground">Portfolio X-Ray: what you really own, across every account.</p>
-        </div>
-        <Button render={<a href="/api/connect" />} variant="outline">
-          Connect a brokerage
-        </Button>
-      </header>
-
-      {loadError && (
-        <Card className="border-destructive">
-          <CardHeader>
-            <CardTitle className="text-destructive">Couldn&apos;t load accounts from SnapTrade</CardTitle>
-            <CardDescription className="font-mono text-xs break-all">{loadError}</CardDescription>
-          </CardHeader>
-        </Card>
-      )}
-
-      {portfolio && portfolio.accounts.length === 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>No accounts connected yet</CardTitle>
-            <CardDescription>Connect the SnapTrade Sandbox to see your holdings.</CardDescription>
-          </CardHeader>
-        </Card>
-      )}
-
-      {portfolio && portfolio.accounts.length > 0 && <PortfolioView p={portfolio} />}
-    </main>
-  );
+function greeting() {
+  const h = Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: "America/New_York" }).format(new Date()));
+  return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
 }
 
-function PortfolioView({ p }: { p: Portfolio }) {
+export default function HomePage() {
+  return <PortfolioGate>{(p) => <Home p={p} />}</PortfolioGate>;
+}
+
+function Home({ p }: { p: Portfolio }) {
+  const xray = lookThrough(p, etfHoldings as FundData);
+  const insights = toInsights(xray);
+  const alloc = allocation(p);
   const investable = p.holdings.filter((h) => !h.cashEquivalent);
-  const totalsDiffer = Math.abs(p.totalValue - p.reportedTotal) > 0.01;
 
   return (
     <>
-      {p.warnings.length > 0 && (
-        <Card className="border-destructive">
-          <CardHeader>
-            <CardTitle className="text-destructive">Some positions were left out</CardTitle>
-            <ul className="list-disc pl-5 text-sm text-muted-foreground">
-              {p.warnings.map((e) => (
-                <li key={e}>{e}</li>
-              ))}
-            </ul>
-          </CardHeader>
-        </Card>
-      )}
+      <PageHeader
+        title={greeting()}
+        subtitle={`Here's what you really own across ${p.accounts.length} connected accounts.`}
+      />
 
-      <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Tile label="Total value" value={fmtUsd0(p.totalValue)} hint={totalsDiffer ? `SnapTrade reports ${fmtUsd0(p.reportedTotal)}` : undefined} />
-        <Tile label="Cash" value={fmtUsd0(p.cash)} hint={`${fmtPct(p.cash / p.totalValue)} of portfolio`} />
-        <Tile label="Holdings" value={String(investable.length)} hint="unique symbols" />
-        <Tile label="Accounts" value={String(p.accounts.length)} hint={p.accounts.map((a) => a.name).join(" · ")} />
-      </section>
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+        <Kpi label="Total value" value={fmtUsd0(p.totalValue)} sub="Across all accounts" />
+        <Suspense fallback={<KpiSkeleton label="Day change" />}>
+          <DayChangeKpi p={p} xray={xray} />
+        </Suspense>
+        <Kpi label="Accounts" value={p.accounts.length} sub={p.accounts.map((a) => a.name).join(" · ")} />
+        <Kpi label="Holdings" value={investable.length} sub="Unique symbols across accounts" />
+      </div>
 
-      <XRayPanel xray={lookThrough(p, etfHoldings as FundData)} />
+      <Panel
+        title={
+          <span className="flex items-center gap-2">
+            <Lightbulb className="size-4 text-primary" strokeWidth={1.75} />
+            Portfolio intelligence
+          </span>
+        }
+        description="What stands out in your portfolio, highest priority first."
+        action={<PanelLink href="/intelligence">View all {insights.length}</PanelLink>}
+      >
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {insights.slice(0, 4).map((i) => (
+            <InsightRow key={i.id} insight={i} />
+          ))}
+        </div>
+      </Panel>
 
-      <MovesPanel />
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+        <div className="space-y-6">
+          <Panel title="Allocation" description="By asset class">
+            <Donut
+              centerLabel="Total value"
+              slices={alloc.map((a, i) => ({
+                label: a.assetClass,
+                value: a.value,
+                color: SLICE_COLORS[i],
+                detail: a.assetClass === "Cash" ? "Includes money-market funds" : a.symbols.join(", "),
+              }))}
+            />
+          </Panel>
+          <HistoryPanel />
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Holdings across accounts</CardTitle>
-          <CardDescription>
-            Combined by symbol. Market value = units × price. Source: SnapTrade
-            {p.asOf ? `, as of ${new Date(p.asOf).toLocaleString("en-US")}` : ""} (fetched{" "}
-            {new Date(p.fetchedAt).toLocaleTimeString("en-US")}).
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Symbol</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Accounts</TableHead>
-                <TableHead className="text-right">Units</TableHead>
-                <TableHead className="text-right">Price</TableHead>
-                <TableHead className="text-right">Value</TableHead>
-                <TableHead className="text-right">% of portfolio</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {p.holdings.map((h) => (
-                <TableRow key={h.symbol} className={h.cashEquivalent ? "text-muted-foreground" : undefined}>
-                  <TableCell>
-                    <div className="font-medium">{h.symbol}</div>
-                    <div className="max-w-56 truncate text-xs text-muted-foreground">{h.name}</div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{h.kind}</Badge>
-                    {h.cashEquivalent && (
-                      <Badge variant="outline" className="ml-1">
-                        counted in cash
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-sm">{h.accounts.map((a) => a.accountName).join(", ")}</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmtUnits(h.units)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmtUsd(h.price)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmtUsd(h.value)}</TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {h.cashEquivalent ? "—" : fmtPct(h.value / p.totalValue)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+        <div className="space-y-6">
+          <TopExposures xray={xray} />
+          <Concentration xray={xray} />
+        </div>
+      </div>
+
     </>
   );
 }
 
-function Tile({ label, value, hint }: { label: string; value: string; hint?: string }) {
+async function DayChangeKpi({ p, xray }: { p: Portfolio; xray: XRay }) {
+  const moves = await computeMoves(p, xray, "day").catch(() => null);
+  if (!moves || moves.pricedValueUsd === 0) return <Kpi label="Day change" value="—" sub="No recent price data" />;
   return (
-    <Card>
-      <CardHeader>
-        <CardDescription>{label}</CardDescription>
-        <CardTitle className="text-2xl tabular-nums">{value}</CardTitle>
-        {hint && <p className="truncate text-xs text-muted-foreground">{hint}</p>}
-      </CardHeader>
-    </Card>
+    <Kpi
+      label="Day change"
+      value={signedUsd(moves.netImpactUsd)}
+      tone={toneOf(moves.netImpactUsd)}
+      sub={`${signedPct((moves.netImpactUsd / (moves.pricedValueUsd - moves.netImpactUsd)) * 100)} today`}
+    />
+  );
+}
+
+function KpiSkeleton({ label }: { label: string }) {
+  return (
+    <div className="rounded-2xl border bg-card px-5 py-4">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <Skeleton className="mt-2 h-7 w-28" />
+      <Skeleton className="mt-2.5 h-3 w-36" />
+    </div>
+  );
+}
+
+function TopExposures({ xray }: { xray: XRay }) {
+  const rows = xray.exposures.slice(0, 5);
+  return (
+    <Panel
+      title="Top exposures"
+      description="After looking through funds"
+      action={<PanelLink href="/exposure">All {xray.exposures.length}</PanelLink>}
+    >
+      <table className="w-full text-[13px]">
+        <thead>
+          <tr className="text-left text-[11px] text-muted-foreground">
+            <th className="pb-2 font-medium">Company / holding</th>
+            <th className="pb-2 text-right font-medium">Direct / via funds</th>
+            <th className="pb-2 text-right font-medium">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((e) => {
+            const direct = e.contributions.filter((c) => c.via === "direct").reduce((s, c) => s + c.value, 0);
+            return (
+              <tr key={e.key} className="border-t">
+                <td className="py-2.5">
+                  <a href={`/exposure?company=${encodeURIComponent(e.key)}`} className="font-medium hover:text-primary">
+                    {e.label}
+                  </a>
+                </td>
+                <td className="py-2.5 text-right text-muted-foreground tabular-nums">
+                  {fmtPct(direct / xray.totalValue)} / {fmtPct((e.value - direct) / xray.totalValue)}
+                </td>
+                <td className="py-2.5 text-right font-semibold tabular-nums">{fmtPct(e.pct)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <SourceNote className="mt-3">Fund contents from sample snapshots.</SourceNote>
+    </Panel>
+  );
+}
+
+function Concentration({ xray }: { xray: XRay }) {
+  const share = (n: number) => xray.exposures.slice(0, n).reduce((s, e) => s + e.value, 0) / xray.totalValue;
+  const companies = xray.exposures.filter((e) => e.contributions.some((c) => c.via !== "direct"));
+  const multiRoute = companies.filter((e) => new Set(e.contributions.map((c) => `${c.via}|${c.accountName}`)).size >= 2);
+  const rows = [
+    { label: "Top 3 exposures", value: fmtPct(share(3)), bar: share(3) },
+    { label: "Top 5 exposures", value: fmtPct(share(5)), bar: share(5) },
+    { label: "Cash", value: fmtPct(xray.cash / xray.totalValue), bar: xray.cash / xray.totalValue },
+    { label: "Companies reached 2+ ways", value: `${multiRoute.length} of ${companies.length}`, bar: multiRoute.length / Math.max(companies.length, 1) },
+  ];
+  return (
+    <Panel title="Concentration" description="How much rides on a few positions">
+      <ul className="space-y-3.5">
+        {rows.map((r) => (
+          <li key={r.label} className="space-y-1.5">
+            <div className="flex justify-between text-[13px]">
+              <span className="text-muted-foreground">{r.label}</span>
+              <span className="font-medium tabular-nums">{r.value}</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-muted">
+              <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(r.bar, 1) * 100}%` }} />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Panel>
   );
 }

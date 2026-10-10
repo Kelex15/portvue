@@ -56,14 +56,11 @@ export function MovesPanel() {
   }, [period, reports]);
 
   return (
-    <Card>
+    <Card className="rounded-2xl">
       <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
-          <CardTitle>What moved your portfolio</CardTitle>
-          <CardDescription>
-            Price moves from {period === "day" ? "Finnhub" : "Alpha Vantage"} (market data); holdings from SnapTrade.
-            Impact = your units × the real price change.
-          </CardDescription>
+          <CardTitle>{period === "day" ? "Today's moves" : "This week's moves"}</CardTitle>
+          <CardDescription>Your units × the real price change.</CardDescription>
         </div>
         <div className="flex rounded-lg border p-0.5">
           {(["day", "week"] as const).map((p) => (
@@ -85,7 +82,7 @@ export function MovesPanel() {
         {error && <p className="text-sm text-destructive">{error}</p>}
         {loading && !report && (
           <p className="text-sm text-muted-foreground">
-            Loading price moves{period === "week" ? " (first load of the day can take a minute)" : ""}…
+            Loading price moves…
           </p>
         )}
         {report && <MovesTable report={report} history={history} />}
@@ -98,41 +95,46 @@ export function MovesPanel() {
 }
 
 function HistorySection({ history }: { history: HistoryReport }) {
+  const [open, setOpen] = useState(false);
   if (history.value.length < 2) return null;
+  if (!open) {
+    return (
+      <Button variant="outline" onClick={() => setOpen(true)}>
+        Show {history.value.length}-day history
+      </Button>
+    );
+  }
   const first = history.value[0];
-  const last = history.value.at(-1)!;
   return (
-    <div className="space-y-2 rounded-lg border p-4">
+    <div className="space-y-2 rounded-xl border bg-background/40 p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="font-semibold">Your current holdings over the last {history.value.length} trading days</h3>
         {history.changeUsd !== null && (
-          <span className={cn("text-sm font-medium tabular-nums", history.changeUsd >= 0 ? "text-emerald-700" : "text-red-700")}>
+          <span className={cn("text-sm font-medium tabular-nums", history.changeUsd >= 0 ? "text-positive" : "text-negative")}>
             {signedUsd(history.changeUsd)} ({signedPct(history.changePct ?? 0)}) since {first.date}
           </span>
         )}
       </div>
       <ValueChart points={history.value} />
       <p className="text-xs text-muted-foreground">
-        Hypothetical: today&apos;s units of {history.symbols.join(", ")} valued at each day&apos;s market close from{" "}
-        {history.source}, not your actual account history (units may have changed). Crypto and cash aren&apos;t included,
-        and fund prices are carried forward on days without a published price, so the {last.date} value differs from
-        SnapTrade&apos;s total.
-        {history.missingSymbols.length > 0 && ` No price history for ${history.missingSymbols.join(", ")}.`}
+        Hypothetical: today&apos;s holdings at past closing prices, cash held constant.
       </p>
     </div>
   );
 }
 
 function MovesTable({ report, history }: { report: MovesReport; history: HistoryReport | null }) {
-  const priced = report.holdings.filter((h) => h.impactUsd !== null);
+  const [showAll, setShowAll] = useState(false);
+  // Priced holdings first (already sorted by impact), then any without data.
+  const all = [...report.holdings.filter((h) => h.impactUsd !== null), ...report.holdings.filter((h) => h.impactUsd === null)];
+  const rows = showAll ? all : all.slice(0, 5);
   return (
     <>
       <p className="text-sm">
-        Net move on priced holdings:{" "}
-        <span className={cn("font-semibold tabular-nums", report.netImpactUsd >= 0 ? "text-emerald-700" : "text-red-700")}>
+        Net move{" "}
+        <span className={cn("font-semibold tabular-nums", report.netImpactUsd >= 0 ? "text-positive" : "text-negative")}>
           {signedUsd(report.netImpactUsd)}
-        </span>{" "}
-        <span className="text-muted-foreground">on {fmtUsd(report.pricedValueUsd)} of holdings</span>
+        </span>
       </p>
       <Table>
         <TableHeader>
@@ -145,8 +147,8 @@ function MovesTable({ report, history }: { report: MovesReport; history: History
           </TableRow>
         </TableHeader>
         <TableBody>
-          {priced.map((h) => (
-            <TableRow key={h.symbol}>
+          {rows.map((h) => (
+            <TableRow key={h.symbol} className={h.impactUsd === null ? "text-muted-foreground" : undefined}>
               <TableCell>
                 <span className="font-medium">{h.symbol}</span>
                 {report.topDrivers.includes(h.symbol) && (
@@ -154,26 +156,34 @@ function MovesTable({ report, history }: { report: MovesReport; history: History
                     top driver
                   </Badge>
                 )}
-                {h.since && <div className="text-xs text-muted-foreground">since {h.since}</div>}
+                <MoveDate h={h} period={report.period} />
               </TableCell>
-              <TableCell
-                className={cn("text-right font-medium tabular-nums", h.pctMove! >= 0 ? "text-emerald-700" : "text-red-700")}
-              >
-                {signedPct(h.pctMove!)}
-              </TableCell>
-              <TableCell
-                className={cn("text-right font-medium tabular-nums", h.impactUsd! >= 0 ? "text-emerald-700" : "text-red-700")}
-              >
-                {signedUsd(h.impactUsd!)}
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-2">
-                  <div className="h-2 flex-1 rounded-full bg-muted">
-                    <div className="h-full rounded-full bg-primary" style={{ width: `${h.shareOfMovement}%` }} />
-                  </div>
-                  <span className="w-12 text-right text-xs tabular-nums">{h.shareOfMovement}%</span>
-                </div>
-              </TableCell>
+              {h.impactUsd === null ? (
+                <TableCell colSpan={3} className="text-right text-xs">
+                  No price data
+                </TableCell>
+              ) : (
+                <>
+                  <TableCell
+                    className={cn("text-right font-medium tabular-nums", h.pctMove! >= 0 ? "text-positive" : "text-negative")}
+                  >
+                    {signedPct(h.pctMove!)}
+                  </TableCell>
+                  <TableCell
+                    className={cn("text-right font-medium tabular-nums", h.impactUsd >= 0 ? "text-positive" : "text-negative")}
+                  >
+                    {signedUsd(h.impactUsd)}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 flex-1 rounded-full bg-muted">
+                        <div className="h-full rounded-full bg-primary" style={{ width: `${h.shareOfMovement}%` }} />
+                      </div>
+                      <span className="w-12 text-right text-xs tabular-nums">{h.shareOfMovement}%</span>
+                    </div>
+                  </TableCell>
+                </>
+              )}
               <TableCell className="hidden sm:table-cell">
                 {history?.series[h.symbol] && <Sparkline closes={history.series[h.symbol]} />}
               </TableCell>
@@ -181,14 +191,28 @@ function MovesTable({ report, history }: { report: MovesReport; history: History
           ))}
         </TableBody>
       </Table>
-      {report.unpricedSymbols.length > 0 && (
-        <p className="text-xs text-muted-foreground">
-          No recent price data for {report.unpricedSymbols.join(", ")} (not covered by the market-data source), so they
-          are left out of the totals.
-        </p>
+      {all.length > 5 && (
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+        >
+          {showAll ? "Show top 5" : `Show all ${all.length}`}
+        </button>
       )}
     </>
   );
+}
+
+const shortDate = (iso: string) =>
+  new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
+// Only shown when a row's window differs from the obvious one (funds lag a day; weekly windows vary by asset).
+function MoveDate({ h, period }: { h: MovesReport["holdings"][number]; period: Period }) {
+  const closeDate = h.source?.match(/close (\d{4}-\d{2}-\d{2})/)?.[1];
+  if (closeDate) return <div className="text-xs text-muted-foreground">{shortDate(closeDate)} close</div>;
+  if (period === "week" && h.since) return <div className="text-xs text-muted-foreground">since {shortDate(h.since)}</div>;
+  return null;
 }
 
 function DriversSection({ report }: { report: MovesReport }) {
@@ -222,7 +246,7 @@ function DriversSection({ report }: { report: MovesReport }) {
   data?.blocks.forEach((b) => b.citations.forEach((c) => (sources[sourceNumber(c.url) - 1].title ??= c.title)));
 
   return (
-    <div className="space-y-3 rounded-lg border p-4">
+    <div className="space-y-3 rounded-xl border bg-background/40 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="font-semibold">Top drivers</h3>
@@ -279,8 +303,7 @@ function DriversSection({ report }: { report: MovesReport }) {
             </ol>
           )}
           <p className="text-xs text-muted-foreground">
-            Possible drivers found by {data.model ?? "Claude"} with web search; news coincides with moves but isn&apos;t
-            proof of cause. Educational, not financial advice.
+            Possible drivers from news, not confirmed causes.
           </p>
         </div>
       )}
