@@ -88,7 +88,7 @@ Then open http://localhost:3000/api/connect, choose the **Self-directed** Sandbo
 
 ## Deployment
 
-Deployed on Vercel with a Turso database, so every instance shares one persistent store and market data is fetched once per ticker per day across all of them. Create one with the Turso CLI (`turso db create portvue`, then `turso db show portvue --url` and `turso db tokens create portvue`) and set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in the Vercel project. The tables are created on first use. Without Turso, the app falls back to a SQLite file in `/tmp` on Vercel, which is wiped on cold starts.
+Deployed on Vercel with a Turso database, so every instance shares one persistent store and market data is fetched once per ticker per day across all of them. Create one with the Turso CLI (`turso db create portvue`, then `turso db show portvue --url` and `turso db tokens create portvue`) and set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in the Vercel project. The tables are created on first use. Turso is required on Vercel; locally the app uses `data/portvue.db` when it isn't set.
 
 ## Limitations
 

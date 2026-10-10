@@ -3,13 +3,11 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { createClient, type Client } from "@libsql/client";
 
-// Turso in production, so every instance shares one persistent store. Without it, fall back to a local
-// SQLite file; Vercel's deployment directory is read-only, so there it can only be /tmp (wiped on cold starts).
+// Turso in production, so every instance shares one persistent store; a local SQLite file in development.
 function databaseUrl() {
   if (process.env.TURSO_DATABASE_URL) return process.env.TURSO_DATABASE_URL;
-  const file =
-    process.env.PORTVUE_DB_PATH ??
-    (process.env.VERCEL ? "/tmp/portvue.db" : path.join(process.cwd(), "data", "portvue.db"));
+  if (process.env.VERCEL) throw new Error("TURSO_DATABASE_URL is not set; the deployment has no persistent store.");
+  const file = path.join(process.cwd(), "data", "portvue.db");
   mkdirSync(path.dirname(file), { recursive: true });
   return `file:${file}`;
 }
