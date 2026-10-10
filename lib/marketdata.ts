@@ -56,7 +56,11 @@ export class AlphaVantageProvider implements MarketDataProvider<WeeklyMove> {
 
   async fetchMove(symbol: string, apiKey: string): Promise<WeeklyMove | null> {
     if (this.exhausted) throw new Error("rate limited earlier in this process");
-    const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&outputsize=compact&symbol=${encodeURIComponent(symbol)}&apikey=${apiKey}`;
+    // "CRYPTO:BTC" selects the digital-currency series; crypto trades daily, so a week is 7 rows rather than 5.
+    const crypto = symbol.startsWith("CRYPTO:");
+    const url = crypto
+      ? `https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY&market=USD&symbol=${encodeURIComponent(symbol.slice(7))}&apikey=${apiKey}`
+      : `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&outputsize=compact&symbol=${encodeURIComponent(symbol)}&apikey=${apiKey}`;
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const body = await res.json();
@@ -67,9 +71,11 @@ export class AlphaVantageProvider implements MarketDataProvider<WeeklyMove> {
     }
     if (body["Error Message"]) return null;
 
-    const series = body["Time Series (Daily)"] as Record<string, Record<string, string>> | undefined;
-    const dates = series ? Object.keys(series).sort().reverse() : [];
-    const tradingDays = 5;
+    const series = body[crypto ? "Time Series (Digital Currency Daily)" : "Time Series (Daily)"] as
+      | Record<string, Record<string, string>>
+      | undefined;
+    const dates = series ? Object.keys(series).sort().reverse().slice(0, crypto ? 140 : 100) : [];
+    const tradingDays = crypto ? 7 : 5;
     if (!series || dates.length <= tradingDays) return null;
     writeCloses(
       symbol,

@@ -1,6 +1,7 @@
 import "server-only";
 import { getMoves } from "@/lib/marketdata";
 import type { Portfolio } from "@/lib/portfolio";
+import { readCloses } from "@/lib/store";
 import type { XRay } from "@/lib/xray";
 
 export type Period = "day" | "week";
@@ -15,6 +16,7 @@ export type HoldingMove = {
   impactUsd: number | null;
   shareOfMovement: number | null; // impact / sum of |impact| across priced holdings
   since: string | null;
+  source: string | null;
   // Other routes into the same company via funds (look-through).
   alsoVia: { fund: string; accountName: string; valueUsd: number }[];
 };
@@ -32,21 +34,49 @@ export type MovesReport = {
 
 const round = (n: number, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
 
-// Market-data sources are queried by US ticker; crypto symbols there collide with unrelated listings (e.g. ETH).
+// Kinds with US-ticker price history (used for the value-history line).
 export const PRICEABLE_KINDS = new Set(["stock", "etf", "mutualfund"]);
+
+// Crypto tickers collide with unrelated US listings (e.g. ETH), so query explicit crypto symbols instead.
+function providerSymbol(symbol: string, kind: string, period: Period) {
+  if (kind !== "crypto") return symbol;
+  return period === "day" ? `BINANCE:${symbol}USDT` : `CRYPTO:${symbol}`;
+}
+
+type Quote = { change: number; changePct: number; startDate?: string; source: string };
+
+// Finnhub's free quote has no mutual funds; their last two published closes give the latest daily move.
+function lastCloseMove(symbol: string): Quote | null {
+  const closes = readCloses(symbol, new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10));
+  if (closes.length < 2) return null;
+  const [prev, last] = closes.slice(-2);
+  return {
+    change: last.close - prev.close,
+    changePct: ((last.close - prev.close) / prev.close) * 100,
+    startDate: prev.date,
+    source: `Alpha Vantage close ${last.date}`,
+  };
+}
 
 export async function computeMoves(portfolio: Portfolio, xray: XRay, period: Period): Promise<MovesReport> {
   const held = portfolio.holdings.filter((h) => !h.cashEquivalent);
-  const quotes = await getMoves(
-    held.filter((h) => PRICEABLE_KINDS.has(h.kind)).map((h) => h.symbol),
-    period as "day",
-  );
+  // Finnhub's free plan rejects mutual funds (HTTP 403); they use their last published close instead.
+  const queried = held.filter((h) => !(period === "day" && h.kind === "mutualfund"));
+  const querySymbol = new Map(queried.map((h) => [h.symbol, providerSymbol(h.symbol, h.kind, period)]));
+  const quotes = await getMoves([...querySymbol.values()], period as "day");
+  const providerName = period === "day" ? "Finnhub" : "Alpha Vantage";
 
   const companyOf = new Map<string, string>();
   for (const e of xray.exposures) for (const c of e.contributions) if (c.via !== "direct") companyOf.set(c.heldSymbol, e.key);
 
   const rows = held.map((h) => {
-    const q = (quotes[h.symbol] ?? null) as { change: number; changePct: number; startDate?: string } | null;
+    const query = querySymbol.get(h.symbol);
+    const raw = (query ? quotes[query] : null) as { change: number; changePct: number; startDate?: string } | null;
+    const q: Quote | null = raw
+      ? { ...raw, source: providerName }
+      : period === "day" && h.kind === "mutualfund"
+        ? lastCloseMove(h.symbol)
+        : null;
     const exposure = xray.exposures.find((e) => e.key === companyOf.get(h.symbol));
     const routes = new Map<string, { fund: string; accountName: string; valueUsd: number }>();
     for (const c of exposure?.contributions ?? []) {
@@ -56,7 +86,6 @@ export async function computeMoves(portfolio: Portfolio, xray: XRay, period: Per
       r.valueUsd = round(r.valueUsd + c.value);
       routes.set(k, r);
     }
-    const alsoVia = [...routes.values()];
     return {
       symbol: h.symbol,
       name: h.name,
@@ -67,7 +96,8 @@ export async function computeMoves(portfolio: Portfolio, xray: XRay, period: Per
       impactUsd: q ? round(h.units * q.change) : null,
       shareOfMovement: null as number | null,
       since: q?.startDate ?? null,
-      alsoVia,
+      source: q?.source ?? null,
+      alsoVia: [...routes.values()],
     };
   });
 
@@ -82,7 +112,7 @@ export async function computeMoves(portfolio: Portfolio, xray: XRay, period: Per
 
   return {
     period,
-    source: period === "day" ? "Finnhub" : "Alpha Vantage",
+    source: providerName,
     netImpactUsd: round(priced.reduce((s, r) => s + r.impactUsd!, 0)),
     grossMovementUsd: round(gross),
     pricedValueUsd: round(priced.reduce((s, r) => s + r.valueUsd, 0)),
