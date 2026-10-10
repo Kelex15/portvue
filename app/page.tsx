@@ -99,7 +99,7 @@ async function DayChangeKpi({ p, xray }: { p: Portfolio; xray: XRay }) {
       label="Day change"
       value={signedUsd(moves.netImpactUsd)}
       tone={toneOf(moves.netImpactUsd)}
-      sub={`${signedPct((moves.netImpactUsd / (moves.pricedValueUsd - moves.netImpactUsd)) * 100)} today`}
+      sub={`${signedPct((moves.netImpactUsd / (moves.pricedValueUsd - moves.netImpactUsd)) * 100)} on priced holdings, excl. cash`}
     />
   );
 }
