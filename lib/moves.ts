@@ -46,8 +46,8 @@ function providerSymbol(symbol: string, kind: string, period: Period) {
 type Quote = { change: number; changePct: number; startDate?: string; source: string };
 
 // Finnhub's free quote has no mutual funds; their last two published closes give the latest daily move.
-function lastCloseMove(symbol: string): Quote | null {
-  const closes = readCloses(symbol, new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10));
+async function lastCloseMove(symbol: string): Promise<Quote | null> {
+  const closes = await readCloses(symbol, new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10));
   if (closes.length < 2) return null;
   const [prev, last] = closes.slice(-2);
   return {
@@ -69,13 +69,17 @@ export async function computeMoves(portfolio: Portfolio, xray: XRay, period: Per
   const companyOf = new Map<string, string>();
   for (const e of xray.exposures) for (const c of e.contributions) if (c.via !== "direct") companyOf.set(c.heldSymbol, e.key);
 
+  const fundFallback = new Map<string, Quote | null>();
+  if (period === "day")
+    for (const h of held) if (h.kind === "mutualfund") fundFallback.set(h.symbol, await lastCloseMove(h.symbol));
+
   const rows = held.map((h) => {
     const query = querySymbol.get(h.symbol);
     const raw = (query ? quotes[query] : null) as { change: number; changePct: number; startDate?: string } | null;
     const q: Quote | null = raw
       ? { ...raw, source: providerName }
       : period === "day" && h.kind === "mutualfund"
-        ? lastCloseMove(h.symbol)
+        ? (fundFallback.get(h.symbol) ?? null)
         : null;
     const exposure = xray.exposures.find((e) => e.key === companyOf.get(h.symbol));
     const routes = new Map<string, { fund: string; accountName: string; valueUsd: number }>();

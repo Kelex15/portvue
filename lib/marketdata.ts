@@ -78,7 +78,7 @@ export class AlphaVantageProvider implements MarketDataProvider<WeeklyMove> {
     const dates = series ? Object.keys(series).sort().reverse().slice(0, crypto ? 140 : 100) : [];
     const tradingDays = crypto ? 7 : 5;
     if (!series || dates.length <= tradingDays) return null;
-    writeCloses(
+    await writeCloses(
       symbol,
       dates.map((date) => ({ date, close: Number(series[date]["4. close"]) })).filter((c) => isNum(c.close)),
       "Alpha Vantage",
@@ -128,14 +128,14 @@ function throttled<R>(provider: MarketDataProvider<unknown>, fn: () => Promise<R
 }
 
 async function getMove<T>(provider: MarketDataProvider<T>, symbol: string): Promise<T | null> {
-  const stored = readMove<T>(provider.id, symbol);
+  const stored = await readMove<T>(provider.id, symbol);
   if (stored !== undefined) return stored;
   return throttled(provider, () => fetchAndStore(provider, symbol));
 }
 
 async function fetchAndStore<T>(provider: MarketDataProvider<T>, symbol: string): Promise<T | null> {
   // Another request may have fetched this symbol while we waited in the queue.
-  const stored = readMove<T>(provider.id, symbol);
+  const stored = await readMove<T>(provider.id, symbol);
   if (stored !== undefined) return stored;
 
   const apiKey = process.env[provider.envVar];
@@ -155,7 +155,7 @@ async function fetchAndStore<T>(provider: MarketDataProvider<T>, symbol: string)
     return null;
   }
 
-  writeMove(provider.id, symbol, move, marketDate());
+  await writeMove(provider.id, symbol, move, marketDate());
   return move;
 }
 

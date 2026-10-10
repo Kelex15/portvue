@@ -63,11 +63,11 @@ The look-through engine, findings, moves and AI routes work on the combined port
 | Weekly moves, daily closes | Alpha Vantage `TIME_SERIES_DAILY` / `DIGITAL_CURRENCY_DAILY` | Free tier: 25 calls a day. |
 | Value history | Stored closes | **Hypothetical:** today's units at past closing prices, cash held constant. |
 
-Market data and news answers are stored in a local SQLite database (`data/portvue.db`, via `node:sqlite`) per ticker per market day, so reloads don't spend API quota.
+Market data, price history, news answers and rate-limit counts are stored in SQLite through libSQL: a hosted [Turso](https://turso.tech) database when `TURSO_DATABASE_URL` is set, otherwise the local file `data/portvue.db`. Rows are keyed per ticker per market day, so reloads don't spend API quota.
 
 ## Setup
 
-Requires **Node 24** (for the built-in `node:sqlite`).
+Requires Node 20 or newer.
 
 ```bash
 npm install
@@ -82,12 +82,13 @@ npm run dev
 | `FINNHUB_API_KEY` | Daily quotes (free key) |
 | `ALPHAVANTAGE_API_KEY` | Weekly moves and price history (free key) |
 | `APP_URL` | Optional: where SnapTrade redirects after connecting (defaults to the request's origin) |
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | Optional locally, needed in production: the shared Turso database (`libsql://…`) |
 
 Then open http://localhost:3000/api/connect, choose the **Self-directed** Sandbox scenario, and you'll return to the app. `npm run inspect` prints every connected account and position.
 
 ## Deployment
 
-Deployed on Vercel. Vercel's filesystem is read-only, so the SQLite cache lives in `/tmp` there (or wherever `PORTVUE_DB_PATH` points) and is rebuilt on cold starts. The first history load of a fresh instance can take about 2 minutes because of Alpha Vantage's free-tier spacing. A host with a persistent disk avoids this.
+Deployed on Vercel with a Turso database, so every instance shares one persistent store and market data is fetched once per ticker per day across all of them. Create one with the Turso CLI (`turso db create portvue`, then `turso db show portvue --url` and `turso db tokens create portvue`) and set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in the Vercel project. The tables are created on first use. Without Turso, the app falls back to a SQLite file in `/tmp` on Vercel, which is wiped on cold starts.
 
 ## Limitations
 

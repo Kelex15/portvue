@@ -33,7 +33,7 @@ Do not suggest buying, selling, or rebalancing anything, and do not give financi
 const client = new Anthropic();
 
 export async function POST(req: NextRequest) {
-  const limited = limitAiCall(req, "explain");
+  const limited = await limitAiCall(req, "explain");
   if (limited) return limited;
   try {
     const portfolio = await getPortfolio();

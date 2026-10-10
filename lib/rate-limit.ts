@@ -14,8 +14,8 @@ function clientId(req: NextRequest) {
 }
 
 /** Returns a 429 response when the visitor is over the limit, otherwise null and counts the call. */
-export function limitAiCall(req: NextRequest, bucket: keyof typeof AI_LIMITS): NextResponse | null {
-  const result = takeAiCall(bucket, clientId(req), AI_LIMITS[bucket]);
+export async function limitAiCall(req: NextRequest, bucket: keyof typeof AI_LIMITS): Promise<NextResponse | null> {
+  const result = await takeAiCall(bucket, clientId(req), AI_LIMITS[bucket]);
   if (result.ok) return null;
   const minutes = Math.ceil(result.retryAfterSec / 60);
   const wait = minutes >= 60 ? `${Math.ceil(minutes / 60)} hours` : `${minutes} minute${minutes === 1 ? "" : "s"}`;

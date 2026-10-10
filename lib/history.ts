@@ -29,7 +29,7 @@ export async function computeHistory(portfolio: Portfolio, days = 90): Promise<H
   const since = new Date(Date.now() - days * 2 * 86_400_000).toISOString().slice(0, 10);
   const series: HistoryReport["series"] = {};
   for (const h of held) {
-    const closes = readCloses(historySymbol(h), since);
+    const closes = await readCloses(historySymbol(h), since);
     if (closes.length > 0) series[h.symbol] = closes;
   }
   const symbols = Object.keys(series);

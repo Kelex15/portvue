@@ -33,10 +33,10 @@ export async function POST(req: NextRequest) {
 
     // Web searches cost money; one answer per period, market day and driver set is enough.
     const driverSet = report.topDrivers.join(",");
-    const stored = readDrivers<DriversResult>(period, driverSet);
+    const stored = await readDrivers<DriversResult>(period, driverSet);
     if (stored) return NextResponse.json(stored);
 
-    const limited = limitAiCall(req, "drivers");
+    const limited = await limitAiCall(req, "drivers");
     if (limited) return limited;
 
     const periodText =
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
       }));
 
     const result: DriversResult = { blocks, drivers: report.topDrivers, model: response?.model };
-    writeDrivers(period, driverSet, result);
+    await writeDrivers(period, driverSet, result);
     return NextResponse.json(result);
   } catch (e) {
     console.error("[drivers]", errMessage(e));
